@@ -8,7 +8,7 @@
     :root {
       /* 聖貝位置：以圖片本身為基準，y 越大越往下 */
       --hotspot-x: 95%;
-      --hotspot-y: 65%;
+      --hotspot-y: 64%;
       --hotspot-size: 8vmin;
     }
     * { box-sizing: border-box; }
@@ -39,6 +39,9 @@
     .stage.debug .hotspot { outline: 2px dashed white; }
     audio { display: none; }
     @media (max-width: 700px) {
+  :root {
+    --hotspot-size: 5vmin;
+  }
       .wrap { padding: 0; }
       .stage { width: 100vw; height: 100dvh; border-radius: 0; }
       .navbtn { font-size: 13px; padding: 11px 8px; }
@@ -46,6 +49,7 @@
       .zoom-controls { top: max(12px, env(safe-area-inset-top)); }
       .nav { padding-bottom: max(11px, env(safe-area-inset-bottom)); }
     }
+
   </style>
 </head>
 <body>
