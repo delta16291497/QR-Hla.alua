@@ -48,10 +48,23 @@
       .hint { bottom: 67px; }
       .zoom-controls { top: max(12px, env(safe-area-inset-top)); }
       .nav { padding-bottom: max(11px, env(safe-area-inset-bottom)); }
+    /* 限制圖片選取、拖曳及手機長按選單 */
+    .art, .hotspotImg {
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-user-drag: none;
     }
 
   </style>
 </head>
+
+<script>
+  document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+  });
+</script>
+
 <body>
   <div class="wrap">
     <main id="stage" class="stage">
