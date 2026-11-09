@@ -49,6 +49,22 @@
     .zoombtn { min-width: 38px; padding: 9px; }
     .zoom-number { font-size: 12px; min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
     .hint { position: absolute; right: 12px; bottom: 62px; max-width: calc(100% - 24px); padding: 7px 10px; border-radius: 10px; background: #000a; font-size: 13px; pointer-events: none; }
+    /* 固定於畫面左上角：不隨圖片縮放、拖曳或切換而移動 */
+    .copyright-note {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      z-index: 3;
+      max-width: min(620px, calc(100% - 235px));
+      padding: 7px 10px;
+      border-radius: 8px;
+      background: rgba(0, 0, 0, .60);
+      color: #fff;
+      font-size: 12px;
+      line-height: 1.6;
+      letter-spacing: .01em;
+      pointer-events: none;
+    }
     .stage.debug .hotspot { outline: 2px dashed white; }
     .art, .hotspotImg, .audio-icon { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
     audio { display: none; }
@@ -60,6 +76,14 @@
       .hint { bottom: 67px; }
       .zoom-controls { top: max(12px, env(safe-area-inset-top)); }
       .nav { padding-bottom: max(11px, env(safe-area-inset-bottom)); }
+      /* 手機畫面較窄時下移，避開右上角的縮放工具 */
+      .copyright-note {
+        top: max(64px, calc(env(safe-area-inset-top) + 58px));
+        left: 10px;
+        max-width: calc(100% - 20px);
+        font-size: 11px;
+        padding: 6px 8px;
+      }
     }
   </style>
 </head>
@@ -78,7 +102,8 @@
         <button class="zoombtn" id="zoomIn" type="button" title="放大">+</button>
         <button class="zoombtn" id="zoomReset" type="button" title="還原大小">還原</button>
       </div>
-      <div id="hint" class="hint">請點擊聖貝圖以播放音檔</div>
+      <div class="copyright-note" role="note">尊重文化傳承與創作權益，圖像及音訊僅供閱覽聆聽，未經授權請勿下載、重製、轉載或另作他用。</div>
+      <div id="hint" class="hint">請點擊圖示以播放音檔</div>
       <nav class="nav" aria-label="圖片切換">
         <button id="prev" class="navbtn" type="button">← 上一張</button>
         <span id="count" class="count">1 / 4</span>
