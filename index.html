@@ -9,7 +9,7 @@
       /* 聖貝位置：以圖片本身為基準，y 越大越往下 */
       --hotspot-x: 95%;
       --hotspot-y: 64%;
-      --hotspot-size: 8vmin;
+      --hotspot-size: 5vmin;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; margin: 0; background: #0b0b0c; color: white; font-family: system-ui, -apple-system, "Noto Sans TC", sans-serif; }
@@ -22,9 +22,22 @@
     .image-layer { position: absolute; left: 50%; top: 50%; transform-origin: center center; }
     .art { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; pointer-events: none; }
     .hotspot { position: absolute; left: var(--hotspot-x); top: var(--hotspot-y); transform: translate(-50%, -50%); width: var(--hotspot-size); height: var(--hotspot-size); border: 2px solid rgba(255,255,255,.75); border-radius: 50%; background: rgba(255,255,255,.16); cursor: pointer; padding: 2px; box-shadow: 0 0 0 2px rgba(0,0,0,.15), 0 4px 14px rgba(0,0,0,.35); }
+    .hotspot.is-playing { background: rgba(255,255,255,.3); box-shadow: 0 0 0 3px rgba(255,255,255,.35), 0 4px 14px rgba(0,0,0,.35); }
     .hotspot:active { transform: translate(-50%, -50%) scale(.95); }
     .hotspot:focus-visible { outline: 3px solid white; outline-offset: 3px; }
-    .hotspotImg { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+    .hotspotImg, .audio-icon { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; user-select: none; }
+    /* 自訂播放／停止圖示：按鈕本體透明，直接顯示使用者的 icon */
+    .hotspot.audio-control, .hotspot.icon-control {
+      background: transparent;
+      border: none;
+      box-shadow: none;
+      padding: 0;
+      display: grid;
+      place-items: center;
+    }
+    .hotspot.icon-control.is-playing, .hotspot.audio-control.is-playing {
+      filter: brightness(1.02);
+    }
     .nav { position: absolute; left: 0; right: 0; bottom: 0; display: grid; grid-template-columns: max-content minmax(0,1fr) max-content; align-items: center; gap: 8px; padding: 11px; background: linear-gradient(transparent, #000b); pointer-events: none; }
     .nav > * { pointer-events: auto; }
     .navbtn, .zoombtn { color: white; background: #202020bb; border: 1px solid #ffffff55; border-radius: 10px; padding: 9px 12px; font: 600 14px/1 system-ui, sans-serif; cursor: pointer; }
@@ -37,43 +50,26 @@
     .zoom-number { font-size: 12px; min-width: 38px; text-align: center; font-variant-numeric: tabular-nums; }
     .hint { position: absolute; right: 12px; bottom: 62px; max-width: calc(100% - 24px); padding: 7px 10px; border-radius: 10px; background: #000a; font-size: 13px; pointer-events: none; }
     .stage.debug .hotspot { outline: 2px dashed white; }
+    .art, .hotspotImg, .audio-icon { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-user-drag: none; }
     audio { display: none; }
     @media (max-width: 700px) {
-  :root {
-    --hotspot-size: 5vmin;
-  }
+      :root { --hotspot-size: 5vmin; }
       .wrap { padding: 0; }
       .stage { width: 100vw; height: 100dvh; border-radius: 0; }
       .navbtn { font-size: 13px; padding: 11px 8px; }
       .hint { bottom: 67px; }
       .zoom-controls { top: max(12px, env(safe-area-inset-top)); }
       .nav { padding-bottom: max(11px, env(safe-area-inset-bottom)); }
-    /* 限制圖片選取、拖曳及手機長按選單 */
-    .art, .hotspotImg {
-      -webkit-touch-callout: none;
-      -webkit-user-select: none;
-      user-select: none;
-      -webkit-user-drag: none;
     }
-
   </style>
 </head>
-
-<script>
-  document.addEventListener('contextmenu', function(e) {
-    e.preventDefault();
-  });
-</script>
-
 <body>
   <div class="wrap">
     <main id="stage" class="stage">
       <div id="viewer" class="viewer" aria-label="圖片閱讀區，可使用 Ctrl 加滾輪或雙指縮放">
         <div id="imageLayer" class="image-layer">
           <img id="art" class="art" alt="展示圖片" draggable="false" />
-          <button id="hotspot" class="hotspot" type="button" aria-label="播放或暫停音檔" title="播放／暫停音檔">
-            <img id="hotspotImg" class="hotspotImg" alt="聖貝播放圖示" src="icon.png" draggable="false" />
-          </button>
+          <div id="hotspots"></div>
         </div>
       </div>
       <div class="zoom-controls" aria-label="圖片縮放控制">
@@ -92,12 +88,25 @@
     </main>
   </div>
   <script>
+    document.addEventListener('contextmenu', event => event.preventDefault());
     // === 基本設定：未來調整檔名與聖貝位置，可從這裡修改 ===
     const params = new URLSearchParams(location.search);
     const IMAGES = (params.get('img') || 'img001.jpg,img002.jpg,img003.jpg,img004.jpg').split(',').map(s => s.trim()).filter(Boolean);
     const audioFile = params.get('audio') || 'audio.mp3';
     const iconFile = params.get('icon') || 'icon.png';
-    const HOT_ONLY = (params.get('hotonly') || 'img002').split(',').map(s => s.trim().toLowerCase());
+    const PLAY_ICON = 'play.png';
+    const STOP_ICON = 'stop.png';
+    // 在這裡調整每張圖片的聖貝位置與音檔（x、y 均為圖片百分比）
+    const AUDIO_BUTTONS = {
+      img002: [
+        { x: 97, y: 25, audio: 'audio.mp3', label: '拉阿魯哇介紹' }
+      ],
+      img004: [
+        { x: 47, y: 5,  audio: 'audio004-1.mp3', label: '聖貝祭' },
+        { x: 49, y: 37, audio: 'audio004-2.mp3', label: '十二貝神的祝福語' },
+        { x: 92.5, y: 35, audio: 'audio004-3.mp3', label: '祭儀流程' }
+      ]
+    };
     const version = params.get('ver') || params.get('v') || '';
     const versioned = src => src + (version ? (src.includes('?') ? '&' : '?') + 'v=' + encodeURIComponent(version) : '');
     const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -107,20 +116,15 @@
     const viewer = document.getElementById('viewer');
     const layer = document.getElementById('imageLayer');
     const art = document.getElementById('art');
-    const hotspot = document.getElementById('hotspot');
+    const hotspots = document.getElementById('hotspots');
     const hint = document.getElementById('hint');
     const audio = document.getElementById('player');
     const count = document.getElementById('count');
     const zoomNumber = document.getElementById('zoomNumber');
-    document.getElementById('hotspotImg').src = versioned(iconFile);
-    audio.src = versioned(audioFile);
+    let activeButton = null;
+    let selectedFile = '';
+    let playbackRequest = 0;
 
-    const x = Number(params.get('x'));
-    const y = Number(params.get('y'));
-    const size = Number(params.get('size'));
-    if (params.has('x') && Number.isFinite(x)) stage.style.setProperty('--hotspot-x', clamp(x, 0, 100) + '%');
-    if (params.has('y') && Number.isFinite(y)) stage.style.setProperty('--hotspot-y', clamp(y, 0, 100) + '%');
-    if (params.has('size') && Number.isFinite(size)) stage.style.setProperty('--hotspot-size', clamp(size, 4, 40) + 'vmin');
     if (params.has('debug')) stage.classList.add('debug');
 
     let index = 0, scale = 1, dx = 0, dy = 0, fitScale = 1;
@@ -140,12 +144,14 @@
       // 始終使用圖片的原始像素大小，避免先縮小後再放大造成模糊。
       layer.style.width = art.naturalWidth + 'px';
       layer.style.height = art.naturalHeight + 'px';
-      // 在一般顯示比例下，聖貝按鈕維持原本的 8vmin 尺寸。
+      // 每顆聖貝都以螢幕顯示尺寸為基準設定，並隨圖片一起縮放
       const iconSize = getComputedStyle(stage).getPropertyValue('--hotspot-size').trim();
       const vmin = Math.min(innerWidth, innerHeight) / 100;
       const wantedSize = parseFloat(iconSize) * vmin;
-      hotspot.style.width = wantedSize / fitScale + 'px';
-      hotspot.style.height = wantedSize / fitScale + 'px';
+      hotspots.querySelectorAll('.hotspot').forEach(button => {
+        button.style.width = wantedSize / fitScale + 'px';
+        button.style.height = wantedSize / fitScale + 'px';
+      });
       applyTransform();
     }
     function resetZoom() { scale = 1; dx = 0; dy = 0; applyTransform(); }
@@ -232,22 +238,81 @@
 
     function updateUI() {
       const playing = !audio.paused && !audio.ended;
-      hint.textContent = playing ? '音檔播放中，再次點擊可暫停' : '請點擊聖貝圖以播放音檔';
+      const isFourth = baseName(IMAGES[index]) === 'img004';
+      hint.textContent = playing
+        ? (isFourth ? '音檔播放中，再次點擊可停止' : '音檔播放中，再次點擊可停止')
+        : '請點擊圖示以播放音檔';
+      hotspots.querySelectorAll('.hotspot').forEach(btn => {
+        const on = btn === activeButton && playing;
+        btn.classList.toggle('is-playing', on);
+        btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+        const icon = btn.querySelector('.audio-icon, .hotspotImg');
+        if (icon) {
+          icon.src = on ? STOP_ICON : PLAY_ICON;
+          icon.alt = on ? '停止' : '播放';
+        }
+      });
+    }
+    function renderButtons(page) {
+      hotspots.replaceChildren();
+      activeButton = null;
+      const buttons = AUDIO_BUTTONS[page] || [];
+      hint.hidden = !buttons.length;
+      hint.style.display = buttons.length ? 'block' : 'none';
+      buttons.forEach((entry, i) => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'hotspot';
+        button.style.left = entry.x + '%';
+        button.style.top = entry.y + '%';
+        button.setAttribute('aria-label', '播放或停止：' + entry.label);
+        button.title = '播放／停止：' + entry.label;
+        button.classList.add('icon-control');
+        const icon = document.createElement('img');
+        icon.className = 'audio-icon';
+        icon.alt = '播放';
+        icon.draggable = false;
+        icon.src = PLAY_ICON;
+        button.appendChild(icon);
+        button.addEventListener('click', async () => {
+          try {
+            if (activeButton === button && !audio.paused) {
+              audio.pause();
+              audio.currentTime = 0;
+              activeButton = null;
+              updateUI();
+              return;
+            }
+            const request = ++playbackRequest;
+            audio.pause();
+            // 切換不同段落時，從該錄音的開頭播放
+            const requested = versioned(entry.audio);
+            if (selectedFile !== requested) {
+              selectedFile = requested;
+              audio.src = requested;
+              audio.load();
+            } else { audio.currentTime = 0; }
+            activeButton = button;
+            await audio.play();
+            if (request !== playbackRequest) audio.pause();
+            updateUI();
+          } catch(err) {
+            if (err.name !== 'AbortError') alert('無法播放音檔：' + entry.audio + '\n' + err.message);
+          }
+        });
+        hotspots.appendChild(button);
+      });
+      fitImage();
     }
     function show(i) {
       if (!IMAGES.length) return;
       index = (i + IMAGES.length) % IMAGES.length;
+      audio.pause();
+      playbackRequest++;
+      activeButton = null;
       art.src = versioned(IMAGES[index]);
       count.textContent = `${index + 1} / ${IMAGES.length}`;
-      const current = baseName(IMAGES[index]);
-      const visible = HOT_ONLY.includes(current) || HOT_ONLY.includes(String(index + 1));
-      hotspot.hidden = !visible;
-      hint.hidden = !visible;
-      // CSS 中 button 預設樣式不應蓋過 hidden 屬性
-      hotspot.style.display = visible ? 'grid' : 'none';
-      hint.style.display = visible ? 'block' : 'none';
-      audio.pause();
-      audio.currentTime = 0;
+      renderButtons(baseName(IMAGES[index]));
       updateUI();
       resetZoom();
       pointers.clear(); gesture = null;
@@ -266,13 +331,6 @@
       if (e.key === 'ArrowLeft') show(index - 1);
       if (e.key === 'ArrowRight') show(index + 1);
       if (e.key === 'Escape') resetZoom();
-    });
-    hotspot.addEventListener('click', async () => {
-      try {
-        if (audio.paused) await audio.play();
-        else audio.pause();
-        updateUI();
-      } catch (err) { alert('無法播放音檔，請確認 audio.mp3 的檔名、格式和路徑。\n' + err.message); }
     });
     ['play', 'pause', 'ended'].forEach(event => audio.addEventListener(event, updateUI));
     IMAGES.forEach(src => { const img = new Image(); img.src = versioned(src); });
